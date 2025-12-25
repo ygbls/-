@@ -10,7 +10,9 @@ liunx服务器，Ubuntu 21.04 amd64 (64bit)上测试可以使用，其他自行�
 finalshell内上传到root目录下执行
 记得右键此文件给777权限（全打√）
 <img width="691" height="643" alt="image" src="https://github.com/user-attachments/assets/973be17f-50a0-4266-bd9e-c7ce9fc472f7" />
+
 接下来回到终端输入指令运行脚本
+
 sudo ./（连着括号替换成文件名）比如sudo ./F10.sh
 <img width="630" height="54" alt="image" src="https://github.com/user-attachments/assets/845a1653-bfd1-4c03-8d20-a57ec8f26547" />
 
