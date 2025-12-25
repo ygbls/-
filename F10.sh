@@ -1,8 +1,8 @@
 #!/bin/bash
 # ===================== 版本信息 =====================
 # 脚本名称: AstrBot+NapCat 智能部署助手
-# 版本号: v2.5.0
-# 最后更新: 2024年
+# 版本号: v2.5.2
+# 最后更新: 2025年12月25日
 # 功能: 修复共享目录挂载问题
 # 声明: 本脚本完全免费，禁止倒卖！
 # 技术支持QQ: 3076737056
@@ -430,13 +430,13 @@ check_shared_directory() {
         if docker inspect astrbot 2>/dev/null | grep -q "\"Source\": \"$SHARED_DIR\""; then
             echo -e "${GREEN}${ICON_CHECK} AstrBot已挂载共享目录${RESET}"
         else
-            echo -e "${YELLOW}${ICON_WARN} AstrBot未挂载共享目录${RESET}"
+            echo -e "${YELLOW}${ICON_WARN} AstrBot未挂载共享目录【多测试几遍，若一直是此消息，再去扩展执行修复】${RESET}"
         fi
         
         if docker inspect napcat 2>/dev/null | grep -q "\"Source\": \"$SHARED_DIR\""; then
             echo -e "${GREEN}${ICON_CHECK} NapCat已挂载共享目录${RESET}"
         else
-            echo -e "${YELLOW}${ICON_WARN} NapCat未挂载共享目录${RESET}"
+            echo -e "${YELLOW}${ICON_WARN} NapCat未挂载共享目录【多测试几遍，若一直是此消息，再去扩展执行修复】${RESET}"
         fi
         
         if [ "$file_count" -gt 0 ]; then
@@ -662,7 +662,7 @@ fix_shared_mount() {
 print_header() {
     clear
     echo -e "${MAGENTA}════════════════════════════════════════════════════════════════${RESET}"
-    echo -e "${CYAN}  ╔═╗╔═╗╔╦╗╔═╗╦═╗╔╦╗  ╔═╗╔═╗╔╦╗  ${WHITE}智能部署助手 v2.5.0${RESET}"
+    echo -e "${CYAN}  ╔═╗╔═╗╔╦╗╔═╗╦═╗╔╦╗  ╔═╗╔═╗╔╦╗  ${WHITE}智能部署助手 v2.5.2${RESET}"
     echo -e "${CYAN}  ║╣ ║ ║║║║║╣ ╠╦╝ ║   ╠═╝║ ║║║║  ${GRAY}AstrBot + NapCat${RESET}"
     echo -e "${CYAN}  ╚═╝╚═╝╩ ╩╚═╝╩╚═ ╩   ╩  ╚═╝╩ ╩  ${YELLOW}修复共享目录挂载版${RESET}"
     echo -e "${MAGENTA}════════════════════════════════════════════════════════════════${RESET}"
@@ -749,6 +749,28 @@ step2() {
         return
     fi
     
+    # 检查是否已安装Docker
+    if command -v docker &>/dev/null; then
+        echo -e "${GREEN}${ICON_CHECK} 检测到Docker已安装，跳过安装步骤${RESET}"
+        
+        # 验证Docker服务状态
+        if systemctl is-active --quiet docker; then
+            echo -e "${GREEN}${ICON_CHECK} Docker服务正在运行${RESET}"
+        else
+            echo -e "${YELLOW}${ICON_WARN} Docker服务未运行，正在启动...${RESET}"
+            if systemctl start docker; then
+                echo -e "${GREEN}${ICON_CHECK} Docker服务启动成功${RESET}"
+            else
+                echo -e "${RED}${ICON_CROSS} Docker服务启动失败${RESET}"
+                return 1
+            fi
+        fi
+        
+        STEP2_DONE=true
+        STEP2_DURATION=1
+        return
+    fi
+    
     if ! confirm_action "安装Docker及Docker Compose"; then
         return
     fi
@@ -757,12 +779,6 @@ step2() {
     echo -e "${BLUE}════════════════════════════════════════════${RESET}"
     echo -e "${WHITE}          第二步：安装Docker${RESET}"
     echo -e "${BLUE}════════════════════════════════════════════${RESET}"
-    
-    if command -v docker &>/dev/null; then
-        echo -e "${GREEN}${ICON_CHECK} Docker已安装${RESET}"
-        STEP2_DONE=true
-        return
-    fi
     
     echo -e "${CYAN}${ICON_LOAD} 开始安装Docker...${RESET}"
     
@@ -831,20 +847,43 @@ step3() {
     echo -e "${WHITE}          第三步：部署AstrBot${RESET}"
     echo -e "${BLUE}════════════════════════════════════════════${RESET}"
     
+    # 检查容器是否存在
     if docker ps -a --filter "name=astrbot" --format "{{.Names}}" | grep -q "astrbot"; then
-        echo -e "${GREEN}${ICON_CHECK} AstrBot已部署${RESET}"
+        # 检查容器状态
+        local container_state=$(docker inspect -f '{{.State.Status}}' astrbot 2>/dev/null || echo "unknown")
         
-        # 检查是否挂载了共享目录
-        if docker inspect astrbot 2>/dev/null | grep -q "\"Source\": \"$SHARED_DIR\""; then
-            echo -e "${GREEN}${ICON_CHECK} 共享目录已挂载${RESET}"
+        if [ "$container_state" = "running" ]; then
+            echo -e "${GREEN}${ICON_CHECK} AstrBot容器已在运行${RESET}"
+            
+            # 检查是否挂载了共享目录
+            if docker inspect astrbot 2>/dev/null | grep -q "\"Source\": \"$SHARED_DIR\""; then
+                echo -e "${GREEN}${ICON_CHECK} 共享目录已挂载${RESET}"
+            else
+                echo -e "${RED}${ICON_CROSS} 警告：共享目录未挂载【多试几遍，若多次确认未挂载则去扩展功能执行修复】！${RESET}"
+                echo -e "${YELLOW}建议重新部署以启用共享文件夹功能${RESET}"
+            fi
+            
+            check_container_status "astrbot"
+            STEP3_DONE=true
+            return
         else
-            echo -e "${RED}${ICON_CROSS} 警告：共享目录未挂载【多试几遍，若多次确认未挂载则去扩展功能执行修复】！${RESET}"
-            echo -e "${YELLOW}建议重新部署以启用共享文件夹功能${RESET}"
+            echo -e "${YELLOW}${ICON_WARN} AstrBot容器存在但未运行，正在尝试启动...${RESET}"
+            
+            # 尝试启动容器
+            if docker start astrbot; then
+                echo -e "${GREEN}${ICON_CHECK} AstrBot容器启动成功${RESET}"
+                sleep 3
+                
+                # 重新检查容器状态
+                check_container_status "astrbot"
+                STEP3_DONE=true
+                return
+            else
+                echo -e "${RED}${ICON_CROSS} AstrBot容器启动失败${RESET}"
+                echo -e "${YELLOW}建议删除容器后重新部署${RESET}"
+                return 1
+            fi
         fi
-        
-        check_container_status "astrbot"
-        STEP3_DONE=true
-        return
     fi
     
     setup_shared_directory
@@ -921,20 +960,43 @@ step4() {
     echo -e "${WHITE}          第四步：部署NapCat${RESET}"
     echo -e "${BLUE}════════════════════════════════════════════${RESET}"
     
+    # 检查容器是否存在
     if docker ps -a --filter "name=napcat" --format "{{.Names}}" | grep -q "napcat"; then
-        echo -e "${GREEN}${ICON_CHECK} NapCat已部署${RESET}"
+        # 检查容器状态
+        local container_state=$(docker inspect -f '{{.State.Status}}' napcat 2>/dev/null || echo "unknown")
         
-        # 检查是否挂载了共享目录
-        if docker inspect napcat 2>/dev/null | grep -q "\"Source\": \"$SHARED_DIR\""; then
-            echo -e "${GREEN}${ICON_CHECK} 共享目录已挂载${RESET}"
+        if [ "$container_state" = "running" ]; then
+            echo -e "${GREEN}${ICON_CHECK} NapCat容器已在运行${RESET}"
+            
+            # 检查是否挂载了共享目录
+            if docker inspect napcat 2>/dev/null | grep -q "\"Source\": \"$SHARED_DIR\""; then
+                echo -e "${GREEN}${ICON_CHECK} 共享目录已挂载${RESET}"
+            else
+                echo -e "${RED}${ICON_CROSS} 警告：共享目录未挂载【多试几遍，若多次确认未挂载则去扩展功能执行修复】！${RESET}"
+                echo -e "${YELLOW}建议重新部署以启用共享文件夹功能${RESET}"
+            fi
+            
+            check_container_status "napcat"
+            STEP4_DONE=true
+            return
         else
-            echo -e "${RED}${ICON_CROSS} 警告：共享目录未挂载【多试几遍，若多次确认未挂载则去扩展功能执行修复】！${RESET}"
-            echo -e "${YELLOW}建议重新部署以启用共享文件夹功能${RESET}"
+            echo -e "${YELLOW}${ICON_WARN} NapCat容器存在但未运行，正在尝试启动...${RESET}"
+            
+            # 尝试启动容器
+            if docker start napcat; then
+                echo -e "${GREEN}${ICON_CHECK} NapCat容器启动成功${RESET}"
+                sleep 3
+                
+                # 重新检查容器状态
+                check_container_status "napcat"
+                STEP4_DONE=true
+                return
+            else
+                echo -e "${RED}${ICON_CROSS} NapCat容器启动失败${RESET}"
+                echo -e "${YELLOW}建议删除容器后重新部署${RESET}"
+                return 1
+            fi
         fi
-        
-        check_container_status "napcat"
-        STEP4_DONE=true
-        return
     fi
     
     setup_shared_directory
@@ -1210,7 +1272,7 @@ show_main_menu() {
 init_script() {
     echo -e "${MAGENTA}"
     echo "╔══════════════════════════════════════════════════════════╗"
-    echo "║              智能部署助手 v2.5.0 初始化                 ║"
+    echo "║              智能部署助手 v2.5.2 初始化                 ║"
     echo "║          已修复共享目录挂载问题                         ║"
     echo "║          本脚本完全免费，严禁倒卖！                     ║"
     echo "║          技术支持QQ: 3076737056                         ║"
